@@ -158,3 +158,32 @@ python scripts/evaluate_forecasts.py forecasts.jsonl --bins 10 --output metrics.
 - 同时提供 `kickoff` 与 `frozen_at` 时，脚本拒绝赛后冻结记录。
 - `benchmark` 可选，但建议保存同一截止时间的去水市场概率。
 - 用完整连续样本，不要只保留有利比赛。
+
+## `predict_corners.py`
+
+运行：
+
+```bash
+python scripts/predict_corners.py corners.json --output corners-prediction.json
+```
+
+输入沿用 `match`，并提供：
+
+```json
+{
+  "match": {"id":"m1","home_team":"Home","away_team":"Away","kickoff_utc":"2026-07-20T19:00:00Z","as_of":"2026-07-20T12:00:00Z"},
+  "draws": 20000,
+  "seed": 7,
+  "half_life_days": 180,
+  "corner_baseline": {"home_rate":5.5,"away_rate":4.6,"prior_weight":10},
+  "series": {
+    "home_for":[{"value":7,"days_ago":8,"reliability":1}],
+    "home_against":[{"value":3,"days_ago":8,"reliability":1}],
+    "away_for":[{"value":5,"days_ago":6,"reliability":1}],
+    "away_against":[{"value":6,"days_ago":6,"reliability":1}]
+  },
+  "total_lines":[8.5,9.5,10.5,11.5]
+}
+```
+
+四个序列必须是同供应商、同90分钟口径的非负整数角球。`reliability` 为0–1；先验权重和半衰期须由历史滚动验证。脚本输出主客及总角球预测摘要、各半球线大小概率、角球数领先概率和最可能总角球。

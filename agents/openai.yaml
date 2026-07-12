@@ -1,4 +1,4 @@
 interface:
   display_name: "足球贝叶斯分析 Pro"
-  short_description: "基于多源证据、市场基准、后验预测与赛后校准的足球赛前概率分析工具"
-  default_prompt: "使用 $football-bayes-analysis 分析这场足球比赛，并区分模型概率、市场概率与不确定性。"
+  short_description: "胜平负、比分、双方角球与总角球的可校准赛前概率分析工具"
+  default_prompt: "使用 $football-bayes-analysis 分析这场足球比赛的胜平负、比分、双方角球数及不确定性。"

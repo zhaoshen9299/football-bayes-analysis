@@ -1,6 +1,6 @@
 # Football Bayes Analysis
 
-一个面向 Codex 的足球赛前概率分析 Skill：使用可追溯的数据快照、贝叶斯/经验贝叶斯进球模型、市场赔率去水、战术情景与赛后校准，对足球比赛给出胜平负概率和不确定性说明。
+一个面向 Codex 的足球赛前概率分析 Skill：使用可追溯的数据快照、贝叶斯/经验贝叶斯进球与角球模型、市场赔率去水、战术情景与赛后校准，对足球比赛给出胜平负、比分、双方角球和总角球概率及不确定性说明。
 
 它不会把搜索到的数字直接拼成“推荐”，也不会用主观百分点加减冒充贝叶斯更新。数据不足时会主动降级，必要时拒绝输出伪精确概率。
 
@@ -11,6 +11,8 @@
 - 使用 Gamma-Poisson 收缩、时间衰减和可选 Dixon-Coles 低比分修正。
 - 对多家机构的十进制赔率逐家去水，再形成市场概率基准。
 - 输出90分钟胜/平/负、后验区间、比分分布和模型—市场差异。
+- 独立预测双方角球、总角球、90%单场区间、常见大小线和角球数领先概率。
+- 使用时间衰减 Gamma-Poisson 角球模型，不用控球率或射门数按固定比例推算角球。
 - 支持伤停、预计首发、战术机制和不确定性情景分析。
 - 支持重复查询刷新、多场分批、快照对比和断点续写。
 - 提供 Log Loss、Multiclass Brier、RPS 和校准分箱的赛后评估脚本。
@@ -34,11 +36,13 @@ football-bayes-analysis/
 │   └── openai.yaml
 ├── references/
 │   ├── data-sources.md
+│   ├── corners.md
 │   ├── input-contract.md
 │   ├── methodology.md
 │   └── report-template.md
 └── scripts/
     ├── predict_match.py
+    ├── predict_corners.py
     └── evaluate_forecasts.py
 ```
 
@@ -72,6 +76,11 @@ $football-bayes-analysis 分析西班牙对比利时的世界杯比赛。
 使用 $football-bayes-analysis 分析：
 世界杯四分之一决赛，西班牙 vs 比利时。
 请给出90分钟胜平负概率、市场去水概率、阵容影响、两个比赛情景和刷新条件。
+```
+
+```text
+使用 $football-bayes-analysis 分析挪威对英格兰，并同时给出双方角球期望、90%预测区间、
+总角球8.5/9.5/10.5/11.5大小概率，以及角球盘口去水基准。
 ```
 
 ```text
@@ -109,6 +118,14 @@ python scripts/predict_match.py match.json --output prediction.json
 
 完整 JSON 协议见 [`references/input-contract.md`](references/input-contract.md)。
 
+根据同供应商逐场角球数据生成角球分布：
+
+```bash
+python scripts/predict_corners.py corners.json --output corners-prediction.json
+```
+
+角球模型输出主客及总角球的后验预测摘要、常见半球线大小概率、角球数领先概率和最可能总角球。详细方法见 [`references/corners.md`](references/corners.md)。
+
 评估冻结的历史预测：
 
 ```bash
@@ -118,6 +135,8 @@ python scripts/evaluate_forecasts.py forecasts.jsonl --bins 10 --output metrics.
 ## 输出边界
 
 - 默认预测90分钟常规时间；晋级、加时和点球必须单独建模。
+- 角球默认只统计90分钟及补时，不含加时；数据与盘口结算口径必须一致。
+- 角球是独立计数目标，不得由控球率、射门、传中或进球率直接换算。
 - 不同供应商的 xG、Field Tilt、PPDA 等指标不得直接拼接。
 - 没有历史验证的伤停或战术判断不得直接换算成胜率百分点。
 - 模型高于市场不自动等于“有价值”，还需考虑历史回测、误差、赔率分散和数据延迟。
