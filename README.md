@@ -16,6 +16,9 @@
 - 支持伤停、预计首发、战术机制和不确定性情景分析。
 - 支持重复查询刷新、多场分批、快照对比和断点续写。
 - 提供 Log Loss、Multiclass Brier、RPS 和校准分箱的赛后评估脚本。
+- 强制区分90分钟赛果、加时后比分与最终晋级，避免淘汰赛错误结算。
+- 提供角球MAE、RMSE、区间覆盖率和大小角Brier的独立复盘脚本。
+- 提供无同时开球泄漏的整季训练／验证／测试回测，并与开盘、收盘市场及角球朴素基线比较。
 
 ## 设计原则
 
@@ -37,13 +40,18 @@ football-bayes-analysis/
 ├── references/
 │   ├── data-sources.md
 │   ├── corners.md
+│   ├── backtesting.md
+│   ├── empirical-validation.md
 │   ├── input-contract.md
 │   ├── methodology.md
 │   └── report-template.md
 └── scripts/
     ├── predict_match.py
     ├── predict_corners.py
-    └── evaluate_forecasts.py
+    ├── backtest_league.py
+    ├── evaluate_forecasts.py
+    ├── evaluate_qualification.py
+    └── evaluate_corners.py
 ```
 
 ## 安装
@@ -110,6 +118,8 @@ $football-bayes-analysis 分析西班牙对比利时的世界杯比赛。
 python scripts/predict_match.py match.json --output prediction.json
 ```
 
+输出会附带可直接进入冻结台账的 `forecast_record`；赛后只需补充官方90分钟实际比分和来源，不必重新手工抄写概率。
+
 支持三种模式：
 
 - `empirical_bayes`：对四个攻防角色序列做时间衰减和 Gamma-Poisson 收缩。
@@ -131,6 +141,27 @@ python scripts/predict_corners.py corners.json --output corners-prediction.json
 ```bash
 python scripts/evaluate_forecasts.py forecasts.jsonl --bins 10 --output metrics.json
 ```
+
+淘汰赛记录必须提供90分钟比分；进入加时的比赛按90分钟平局结算。角球批量评估使用：
+
+```bash
+python scripts/evaluate_qualification.py qualification-forecasts.jsonl --output qualification-metrics.json
+python scripts/evaluate_corners.py corner-forecasts.jsonl --output corner-metrics.json
+```
+
+完整联赛时序回测使用三个连续赛季，所有参数只在验证季锁定：
+
+```bash
+python scripts/backtest_league.py --train E0_2324.csv --validation E0_2425.csv --test E0_2526.csv --output-dir backtest-output --draws 1000 --seed 20260714
+```
+
+脚本会输出380场逐场概率、市场基准、赛果误差、双方及总角球预测和复盘标签，并生成汇总指标。详细协议见 [`references/backtesting.md`](references/backtesting.md)。
+
+## 英超 2025/26 留出验证
+
+使用2023/24训练预热、2024/25选择参数、2025/26全部380场作最终测试：独立模型、开盘市场和收盘市场的胜平负 Log Loss 分别为 `1.030737`、`1.015252`、`1.011767`。模型减收盘市场的配对差95%区间跨0，因此不能声称模型具有稳定优势；验证集选择的市场混合权重为1.0。
+
+角球模型总数 MAE 为 `2.635824`，朴素基线为 `2.650720`，改善同样很小且配对区间跨0。Skill 因此新增了严格时间切分、同时开球批量更新、赛季基线漂移审计、市场混合验证和角球残差审计。完整边界与指标见 [`references/empirical-validation.md`](references/empirical-validation.md)。
 
 ## 输出边界
 

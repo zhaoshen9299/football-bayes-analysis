@@ -144,20 +144,56 @@ python scripts/predict_match.py match.json --output prediction.json
 运行：
 
 ```bash
-python scripts/evaluate_forecasts.py forecasts.jsonl --bins 10 --output metrics.json
+python scripts/evaluate_forecasts.py forecasts.jsonl --manifest manifest.jsonl --bins 10 --output metrics.json
 ```
 
-每行一个在开赛前冻结的预测：
+每行一个在开赛前冻结的预测。推荐使用带90分钟实际比分的新协议：
 
 ```json
-{"match_id":"m1","kickoff":"2026-07-01T19:00:00Z","frozen_at":"2026-07-01T12:00:00Z","probabilities":{"home":0.5,"draw":0.28,"away":0.22},"outcome":"home","benchmark":{"home":0.48,"draw":0.29,"away":0.23}}
+{"match_id":"m1","target":"result_90min","stage":"Quarter-finals","data_level":"L3","snapshot_kind":"pre_match","forecast_role":"market","kickoff":"2026-07-01T19:00:00Z","frozen_at":"2026-07-01T12:00:00Z","probabilities":{"home":0.5,"draw":0.28,"away":0.22},"benchmark":{"home":0.48,"draw":0.29,"away":0.23},"actual":{"home_goals_90":1,"away_goals_90":1,"result_type":"aet","source":"official-match-report"}}
 ```
 
-- `outcome` 只能是 `home`、`draw`、`away`。
+- `target` 当前必须为 `result_90min`；晋级概率不得混入这个文件。
+- `actual.result_type` 为 `regular`、`aet` 或 `penalties`。后两者要求90分钟比分为平局。
+- `actual.source` 必填，优先保存官方比赛报告链接或稳定标识。
+- 旧协议仍接受 `outcome`，但会警告无法核验90分钟比分。
 - 三项概率必须合计为 1，脚本不会静默归一化。
-- 同时提供 `kickoff` 与 `frozen_at` 时，脚本拒绝赛后冻结记录。
+- `kickoff` 与 `frozen_at` 必填，脚本拒绝赛后冻结记录。
 - `benchmark` 可选，但建议保存同一截止时间的去水市场概率。
-- 用完整连续样本，不要只保留有利比赛。
+- 有 `benchmark` 时同时保存 `benchmark_meta.source` 与 `benchmark_meta.captured_at_max`；脚本拒绝晚于 `frozen_at` 的基准。
+- 用完整连续样本，不要只保留有利比赛；同场多个快照不会被视作更多独立比赛。
+
+完整性清单每行格式为 `{"match_id":"m1","status":"FROZEN_FORECAST"}`；状态可为 `FROZEN_FORECAST`、`NO_FORECAST`、`INVALID_FORECAST` 或 `PENDING_RESULT`。脚本据此输出预测覆盖率；未提供清单时明确警告覆盖率未知。
+
+## `evaluate_qualification.py`
+
+晋级概率使用独立二项协议：
+
+```bash
+python scripts/evaluate_qualification.py qualification.jsonl --output qualification-metrics.json
+```
+
+```json
+{"match_id":"m1","target":"to_qualify","snapshot_kind":"pre_match","kickoff":"2026-07-01T19:00:00Z","frozen_at":"2026-07-01T12:00:00Z","probabilities":{"home":0.58,"away":0.42},"actual":{"qualified":"home","source":"official-match-report"}}
+```
+
+脚本输出二项 Log Loss、Brier、最高概率命中率和实际结果平均获配概率；不得把三项90分钟概率直接归一化成晋级概率。
+
+## `evaluate_corners.py`
+
+运行：
+
+```bash
+python scripts/evaluate_corners.py corner-forecasts.jsonl --output corner-metrics.json
+```
+
+每行记录冻结的预测摘要、半球线概率和官方90分钟角球：
+
+```json
+{"match_id":"m1","kickoff":"2026-07-01T19:00:00Z","frozen_at":"2026-07-01T12:00:00Z","prediction":{"home":{"mean":5.7,"p05":2,"p95":10},"away":{"mean":4.5,"p05":1,"p95":9},"total":{"mean":10.2,"p05":5,"p95":16},"total_lines":{"9.5":{"over":0.57}}},"actual":{"home":6,"away":3,"period":"90min_including_stoppage","source":"official-match-report"}}
+```
+
+脚本拒绝未声明90分钟口径或实际值来源的角球记录，输出主客及总数MAE、RMSE、均值误差、90%区间覆盖率和各半球线Brier。
 
 ## `predict_corners.py`
 
@@ -187,3 +223,13 @@ python scripts/predict_corners.py corners.json --output corners-prediction.json
 ```
 
 四个序列必须是同供应商、同90分钟口径的非负整数角球。`reliability` 为0–1；先验权重和半衰期须由历史滚动验证。脚本输出主客及总角球预测摘要、各半球线大小概率、角球数领先概率和最可能总角球。
+
+## `backtest_league.py`
+
+对三个连续完整联赛 CSV 做训练／验证／测试：
+
+```bash
+python scripts/backtest_league.py --train E0_2324.csv --validation E0_2425.csv --test E0_2526.csv --output-dir backtest-output --draws 1000 --seed 20260714
+```
+
+CSV 至少需要 `Date`、`HomeTeam`、`AwayTeam`、`FTHG`、`FTAG`、`FTR`、`HC`、`AC`、`AvgH`、`AvgD`、`AvgA`、`AvgCH`、`AvgCD`、`AvgCA`、`AvgC>2.5`、`AvgC<2.5`；`Time` 可选。脚本按开球时间滚动，对同时开球比赛批量更新，验证集锁定超参数，输出逐场 `match_review.csv` 和汇总 `metrics.json`。所有脚本只依赖 Python 标准库。

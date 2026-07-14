@@ -1,4 +1,4 @@
 interface:
   display_name: "足球贝叶斯分析 Pro"
-  short_description: "胜平负、比分、双方角球与总角球的可校准赛前概率分析工具"
-  default_prompt: "使用 $football-bayes-analysis 分析这场足球比赛的胜平负、比分、双方角球数及不确定性。"
+  short_description: "赛前概率、双方角球及严格区分90分钟与晋级的赛后校准"
+  default_prompt: "使用 $football-bayes-analysis 分析或复盘这场比赛，严格区分90分钟赛果、晋级和角球口径。"

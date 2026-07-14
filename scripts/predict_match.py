@@ -273,7 +273,12 @@ def validate_match(payload: Dict[str, Any]) -> Dict[str, Any]:
     as_of = parse_time(match["as_of"], "match.as_of")
     if as_of >= kickoff:
         raise InputError("match.as_of must be before match.kickoff_utc")
-    return {key: match[key] for key in required}
+    validated = {key: match[key] for key in required}
+    if "stage" in match:
+        if not isinstance(match["stage"], str) or not match["stage"].strip():
+            raise InputError("match.stage must be a non-empty string when supplied")
+        validated["stage"] = match["stage"]
+    return validated
 
 
 def build_rate_sampler(payload: Dict[str, Any], rng: random.Random, warnings: List[str]):
@@ -468,11 +473,37 @@ def analyze(payload: Dict[str, Any]) -> Dict[str, Any]:
                 for key in OUTCOMES
             }
         }
+    forecast_probabilities = (
+        {key: model["probabilities"][key]["mean"] for key in OUTCOMES}
+        if model is not None
+        else dict(market["consensus_probabilities"])
+    )
+    forecast_record = {
+        "match_id": match["id"],
+        "target": "result_90min",
+        "stage": match.get("stage", "unspecified"),
+        "data_level": payload.get("data_level", "L3" if model is None else "unspecified"),
+        "snapshot_kind": payload.get("snapshot_kind", "unspecified"),
+        "forecast_role": "model" if model is not None else "market",
+        "kickoff": match["kickoff_utc"],
+        "frozen_at": match["as_of"],
+        "probabilities": {key: rounded(forecast_probabilities[key]) for key in OUTCOMES},
+    }
+    if model is not None and market is not None:
+        forecast_record["benchmark"] = dict(market["consensus_probabilities"])
+        captured = [book["captured_at"] for book in market["books"]]
+        forecast_record["benchmark_meta"] = {
+            "source": "multi-book proportional de-vig consensus",
+            "books_count": market["books_count"],
+            "captured_at_min": min(captured),
+            "captured_at_max": max(captured),
+        }
     return {
         "match": match,
         "model": model,
         "market": market,
         "comparison": comparison,
+        "forecast_record": forecast_record,
         "warnings": warnings,
     }
 
